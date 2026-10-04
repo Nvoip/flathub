@@ -1,0 +1,88 @@
+app-id: br.com.nvoip.App
+base: io.qt.qtwebengine.BaseApp
+base-version: '6.11'
+runtime: org.kde.Platform
+runtime-version: '6.11'
+sdk: org.kde.Sdk
+command: nvoip
+
+finish-args:
+  # Share IPC namespace with host
+  - --share=ipc
+  # Display windows with Wayland (fallback to X11 otherwise)
+  - --socket=wayland
+  - --socket=fallback-x11
+  # GPU acceleration for QtWebEngine
+  - --device=dri
+  # Audio access (PJSIP uses ALSA routed to PulseAudio/PipeWire)
+  - --socket=pulseaudio
+  # Network access (SIP/RTP, Nvoip API and chat)
+  - --share=network
+  # System keyring for the OAuth refresh token (QtKeychain)
+  - --talk-name=org.freedesktop.secrets
+  - --talk-name=org.kde.kwalletd6
+  - --talk-name=org.kde.kwalletd5
+  # Notifs & tray icons
+  - --talk-name=org.freedesktop.Notifications
+  - --talk-name=org.kde.StatusNotifierWatcher
+  # Qt environment variables
+  - --env=QTWEBENGINEPROCESS_PATH=/app/bin/QtWebEngineProcess
+
+cleanup-commands:
+  - /app/cleanup-BaseApp.sh
+
+modules:
+  # Prebuilt release archive: bin/nvoip (PJSIP linked statically),
+  # lib/libqt6keychain.so* and share/ (icon, desktop file, MetaInfo, licenses).
+  # QtKeychain and PJSIP are already in the archive, so they are not rebuilt.
+  - name: nvoip
+    buildsystem: simple
+    build-commands:
+      # The archive must match the arch being built and the runtime/base above
+      - grep -qx "arch=${FLATPAK_ARCH}" BUILDINFO
+      - grep -qx "runtime=org.kde.Platform//6.11" BUILDINFO
+      - grep -qx "base=io.qt.qtwebengine.BaseApp//6.11" BUILDINFO
+      # cp -a keeps modes and symlinks (libqt6keychain.so -> .so.1 -> .so.0.15.0)
+      - cp -a bin lib share "${FLATPAK_DEST}/"
+    sources:
+      - type: archive
+        only-arches:
+          - x86_64
+        url: https://github.com/Nvoip/nvoip-app-releases/releases/download/linux-0.2.9/nvoip-linux-0.2.9-x86_64.tar.gz
+        sha256: 23db243cb04a2e50be91e47d3b00d80e6d3cdb764eb67b76f173de4303790187
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/Nvoip/nvoip-app-releases/releases
+          # Newest stable linux-X.Y.Z release that already has both archives,
+          # so x86_64 and aarch64 are always bumped together
+          version-query: >-
+            [.[] | select(.draft == false and .prerelease == false)
+            | select(.tag_name | test("^linux-[0-9]+(\\.[0-9]+)*$"))
+            | (.tag_name | sub("^linux-"; "")) as $v
+            | select(any(.assets[]; .name == "nvoip-linux-\($v)-x86_64.tar.gz")
+                and any(.assets[]; .name == "nvoip-linux-\($v)-aarch64.tar.gz"))
+            | $v] | first
+          url-query: >-
+            .[] | select(.tag_name == "linux-" + $version)
+            | .assets[] | select(.name == "nvoip-linux-" + $version + "-x86_64.tar.gz")
+            | .browser_download_url
+          is-main-source: true
+      - type: archive
+        only-arches:
+          - aarch64
+        url: https://github.com/Nvoip/nvoip-app-releases/releases/download/linux-0.2.9/nvoip-linux-0.2.9-aarch64.tar.gz
+        sha256: 563b673d9ac02ffb4b21a7e4672d47dc44a0e8b46f0afbb7ad9d358c4e015019
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/Nvoip/nvoip-app-releases/releases
+          version-query: >-
+            [.[] | select(.draft == false and .prerelease == false)
+            | select(.tag_name | test("^linux-[0-9]+(\\.[0-9]+)*$"))
+            | (.tag_name | sub("^linux-"; "")) as $v
+            | select(any(.assets[]; .name == "nvoip-linux-\($v)-x86_64.tar.gz")
+                and any(.assets[]; .name == "nvoip-linux-\($v)-aarch64.tar.gz"))
+            | $v] | first
+          url-query: >-
+            .[] | select(.tag_name == "linux-" + $version)
+            | .assets[] | select(.name == "nvoip-linux-" + $version + "-aarch64.tar.gz")
+            | .browser_download_url
